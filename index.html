@@ -1,136 +1,57 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Core AI Developer</title>
-  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700&display=swap" rel="stylesheet">
+from flask import Flask, render_template, request, jsonify
+import torch
+from transformers import pipeline
 
-  <style>
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-      font-family: 'Poppins', sans-serif;
-    }
+app = Flask(__name__)
 
-    body {
-      height: 100vh;
-      background: linear-gradient(135deg, #0f2027, #203a43, #2c5364);
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      overflow: hidden;
-      color: #fff;
-    }
+print("Loading Qwen1.5 0.5B Chat Model...")
+pipe = pipeline(
+    "text-generation",
+    model="Qwen/Qwen1.5-0.5B-Chat",
+    torch_dtype=torch.float32,
+    device_map="auto"
+)
+print("Model Loaded Successfully!")
 
-    .container {
-      background: rgba(255, 255, 255, 0.05);
-      border-radius: 20px;
-      padding: 60px 80px;
-      backdrop-filter: blur(15px);
-      text-align: center;
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
-      animation: fadeIn 2s ease forwards;
-      width: 70%;
-      max-width: 900px;
-    }
+@app.route("/")
+def home():
+    return render_template("index.html")
 
-    h1 {
-      font-size: 3rem;
-      margin-bottom: 20px;
-      background: linear-gradient(90deg, #ff6ec4, #7873f5);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-    }
+@app.route("/generate", methods=["POST"])
+def generate():
+    data = request.json
+    user_prompt = data.get("prompt", "")
 
-    #displayText {
-      font-size: 1.2rem;
-      margin: 25px 0;
-      min-height: 140px;
-      line-height: 1.6;
-    }
+    if not user_prompt:
+        return jsonify({"response": "Please enter a message."}), 400
 
-    button {
-      padding: 15px 40px;
-      font-size: 1rem;
-      font-weight: 600;
-      border: none;
-      border-radius: 50px;
-      cursor: pointer;
-      background: linear-gradient(90deg, #ff6ec4, #7873f5);
-      color: #fff;
-      transition: 0.3s all;
-      margin: 10px;
-    }
+    messages = [
+        {"role": "system", "content": "You are a helpful AI assistant, YOUR NAME IS LYRAMOON AND YOU ARE FEMALE AI, YOUR OWNER AND CREATOR AND FOUNDER IS MUHAMMAD TAQI."},
+        {"role": "user", "content": user_prompt}
+    ]
+    
+    prompt = pipe.tokenizer.apply_chat_template(
+        messages, tokenize=False, add_generation_prompt=True
+    )
 
-    button:hover {
-      transform: scale(1.1);
-      box-shadow: 0 0 20px rgba(255, 110, 196, 0.5);
-    }
+    outputs = pipe(
+        prompt, 
+        max_new_tokens=256, 
+        do_sample=True, 
+        temperature=0.7, 
+        top_k=50, 
+        top_p=0.95
+    )
+    
+    generated_text = outputs[0]["generated_text"]
+    
+    # Qwen1.5 ChatML format handle karne ke liye parsing update
+    if "<|im_start|>assistant" in generated_text:
+        response = generated_text.split("<|im_start|>assistant")[-1].replace("<|im_end|>", "").strip()
+    else:
+        response = generated_text.strip()
 
-    .shape {
-      position: absolute;
-      border-radius: 50%;
-      background: rgba(255, 255, 255, 0.1);
-      animation: float 6s ease-in-out infinite;
-      filter: blur(50px);
-    }
+    return jsonify({"response": response})
 
-    .shape1 { width: 300px; height: 300px; top: -100px; left: -100px; }
-    .shape2 { width: 200px; height: 200px; bottom: -50px; right: -50px; }
-    .shape3 { width: 150px; height: 150px; top: 50%; left: 80%; }
-
-    @keyframes float {
-      0%, 100% { transform: translateY(0) rotate(0deg); }
-      50% { transform: translateY(-30px) rotate(45deg); }
-    }
-  </style>
-</head>
-<body>
-
-  <div class="shape shape1"></div>
-  <div class="shape shape2"></div>
-  <div class="shape shape3"></div>
-
-  <div class="container">
-    <h1>Welcome to Core AI Developer</h1>
-
-    <!-- TEXT APPEARS HERE -->
-    <div id="displayText">Press English or Urdu button to hear and read the message.</div>
-
-    <!-- Buttons -->
-    <button onclick="speakEnglish()">ENGLISH 🔊</button>
-    <button onclick="speakUrdu()">URDU 🔊</button>
-  </div>
-
-  <script>
-    function speakEnglish() {
-      const text = "Welcome to my website. First you pass the scholarship test. Take a screenshot of your test result. Then go to the IP giver and get your IP. Copy the IP code and paste it on the course fee. Take a picture of the fee and then press contact and send it to WhatsApp.";
-
-      // Show text on screen
-      document.getElementById("displayText").innerText = text;
-
-      // Speak text
-      const speech = new SpeechSynthesisUtterance(text);
-      speech.lang = "en-US";
-      speech.rate = 1;
-      window.speechSynthesis.speak(speech);
-    }
-
-    function speakUrdu() {
-      const text = "Welcome to my website. Pehle aap scholarship test pass karein. Test result ka screenshot lein. Phir IP giver par jaa kar apna IP hasil karein. Iss IP code ko copy karein aur course fee mein paste karein. Fee ki picture lein aur contact par jaa kar WhatsApp par send karein.";
-
-      // Show Roman Urdu text on screen
-      document.getElementById("displayText").innerText = text;
-
-      // Speak text
-      const speech = new SpeechSynthesisUtterance(text);
-      speech.lang = "ur-PK"; // Urdu voice works for Roman Urdu
-      speech.rate = 1;
-      window.speechSynthesis.speak(speech);
-    }
-  </script>
-
-</body>
-</html>
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=7860)
